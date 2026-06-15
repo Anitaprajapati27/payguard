@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import com.payguard.service.MLFraudService;
+import com.payguard.service.FraudAlertService;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +29,8 @@ public class WalletService {
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final FraudEngine fraudEngine;
+    private final MLFraudService mlFraudService;
+    private final FraudAlertService fraudAlertService;
 
     public Map<String, Object> getBalance(String email) {
         User user = userRepository.findByEmail(email)
@@ -119,6 +123,32 @@ public class WalletService {
                 + ". Please contact support."
             );
         }
+        // 8.5 🤖 ML-based fraud check
+int recentTxnCount = transactionRepository
+    .countBySenderWalletIdAndCreatedAtAfter(
+        senderWallet.getId(),
+        java.time.LocalDateTime.now().minusMinutes(5)
+    );
+
+MLFraudService.MLFraudResult mlResult = mlFraudService.checkFraud(
+    amountInPaise,
+    senderWallet.getBalance(),
+    recentTxnCount
+);
+
+if (mlResult.isFraud()) {
+    // Save ML fraud alert
+    fraudAlertService.saveFraudAlert(
+        senderWallet.getId(),
+        amountInPaise,
+        "ML_FRAUD_SCORE_" + mlResult.fraudProbability()
+    );
+    throw new RuntimeException(
+        "Transaction blocked by ML fraud detection. Risk level: "
+        + mlResult.riskLevel()
+        + ". Score: " + mlResult.fraudProbability()
+    );
+}
 
         // 9. Debit and Credit
         senderWallet.setBalance(senderWallet.getBalance() - amountInPaise);
