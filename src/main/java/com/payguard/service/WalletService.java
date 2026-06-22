@@ -20,7 +20,10 @@ import java.util.Optional;
 import java.util.UUID;
 import com.payguard.service.MLFraudService;
 import com.payguard.service.FraudAlertService;
-
+// Add this import
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import com.payguard.dto.BalanceResponse;
 @Service
 @RequiredArgsConstructor
 public class WalletService {
@@ -32,19 +35,24 @@ public class WalletService {
     private final MLFraudService mlFraudService;
     private final FraudAlertService fraudAlertService;
 
-    public Map<String, Object> getBalance(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        Wallet wallet = walletRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new RuntimeException("Wallet not found"));
-        return Map.of(
-            "email", email,
-            "balanceInPaise", wallet.getBalance(),
-            "balanceInRupees", wallet.getBalance() / 100.0
-        );
-    }
+@Cacheable(value = "wallet_balance", key = "#email")
+public BalanceResponse getBalance(String email) {
+    System.out.println("💾 Fetching balance from DB for: " + email);
+    User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+    Wallet wallet = walletRepository.findByUserId(user.getId())
+            .orElseThrow(() -> new RuntimeException("Wallet not found"));
+
+    return BalanceResponse.builder()
+            .email(email)
+            .balanceInPaise(wallet.getBalance())
+            .balanceInRupees(wallet.getBalance() / 100.0)
+            .build();
+}
+
 
     @Transactional
+    @CacheEvict(value = "wallet_balance", key = "#email")
     public Map<String, Object> addMoney(String email, Double amountInRupees) {
         if (amountInRupees <= 0) throw new RuntimeException("Amount must be positive");
         User user = userRepository.findByEmail(email)
@@ -62,6 +70,7 @@ public class WalletService {
     }
 
     @Transactional
+    @CacheEvict(value = "wallet_balance", allEntries = true)
     public Map<String, Object> transfer(String senderEmail,
                                          String receiverEmail,
                                          Double amountInRupees,

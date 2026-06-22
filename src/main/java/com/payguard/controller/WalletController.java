@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
+import com.payguard.dto.BalanceResponse;
 
 @RestController
 @RequestMapping("/api/wallet")
@@ -24,10 +25,10 @@ public class WalletController {
     private final FraudAlertRepository fraudAlertRepository;
 
     @GetMapping("/balance")
-    public ResponseEntity<Map<String, Object>> getBalance(
-            @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<BalanceResponse> getBalance(
+        @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(walletService.getBalance(userDetails.getUsername()));
-    }
+   }
 
     @PostMapping("/add-money")
     public ResponseEntity<Map<String, Object>> addMoney(
